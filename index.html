@@ -765,6 +765,18 @@ const getWt=(n,i)=>store.getItem(KEY+"wt_"+n+"_"+i)||"";
 const setWt=(n,i,v)=>store.setItem(KEY+"wt_"+n+"_"+i,v);
 const getAlt=(w,i)=>store.getItem(KEY+"alt_"+w+"_"+i)||"";
 const setAlt=(w,i,v)=>store.setItem(KEY+"alt_"+w+"_"+i,v);
+/* Единая точка правды: что реально показывать для слота.
+   base = упражнение из плана; замена может быть:
+   - id упражнения библиотеки (есть карточка техники), или
+   - "txt:Название" (вариация без своей карточки — показываем как есть). */
+function resolveEx(n,idx,baseId){
+  const raw=getAlt(n,idx);
+  if(raw){
+    if(raw.startsWith("txt:")){const nm=raw.slice(4);return {id:baseId,name:nm,fromAlt:true,hasCard:false};}
+    if(EX[raw]) return {id:raw,name:EX[raw].name,fromAlt:true,hasCard:true};
+  }
+  return {id:baseId,name:EX[baseId].name,fromAlt:false,hasCard:true};
+}
 
 /* ================= RENDER: PLAN ================= */
 const DAY_ORDER=["A","B","C"];
@@ -814,22 +826,24 @@ function openWorkout(n){
   itemsFor(day,w).forEach((it,idx)=>{
     if(it.hdr){lines+=`<div class="blockhdr">— ${it.hdr} —</div>`;return;}
     const baseId=exIdFor(it,w);
-    const chosenRaw=getAlt(n,idx);
-    const chosen=(chosenRaw&&EX[chosenRaw])?chosenRaw:"";
-    const exId=chosen||baseId;
+    const R=resolveEx(n,idx,baseId);
+    const exId=R.id;
     const ex=EX[exId];
     const fav=ex.fav?'<span class="fav" title="твоё любимое">♥</span>':"";
+    const t=target(it);
+    const pv=prevSets(n,idx,t.sets);
     lines+=`<div class="exline">
-      <a class="exname" data-ex="${exId}">${ex.name}</a>${fav}
+      <a class="exname" data-ex="${exId}">${R.name}</a>${fav}
       <span class="exsets">${fmtSets(it,exId)}</span>
-      ${(()=>{const t=target(it);const pv=prevSets(n,idx,t.sets);return pv?`<span class="hist">📈 ${fmtPrev(pv)}</span>`:""})()}
-      <a class="ytmini" href="${yt(ex.name)}" target="_blank" rel="noopener" title="Короткие видео с техникой">▶ шортс</a>
+      ${pv?`<span class="hist">📈 ${fmtPrev(pv)}</span>`:""}
+      <input class="wt" inputmode="decimal" data-n="${n}" data-i="${idx}" value="${getWt(n,idx)}" placeholder="${(n>3&&getWt(n-3,idx))?getWt(n-3,idx)+' кг →':'вес, кг'}" title="Рабочий вес — сохранится">
+      <a class="ytmini" href="${yt(R.name)}" target="_blank" rel="noopener" title="Короткие видео с техникой">▶ шортс</a>
       <button class="swap" data-w="${n}" data-i="${idx}">↔ заменить</button>
       ${it.note?`<span class="exnote">· ${it.note}</span>`:""}
-      ${chosen?`<span class="replaced">↔ замена активна <a style="cursor:pointer;text-decoration:underline" class="unrep" data-w="${n}" data-i="${idx}">вернуть ${EX[baseId].name}</a></span>`:""}
+      ${R.fromAlt?`<span class="replaced">↔ заменено${R.hasCard?'':' (вариация)'} <a style="cursor:pointer;text-decoration:underline" class="unrep" data-w="${n}" data-i="${idx}">вернуть «${EX[baseId].name}»</a></span>`:""}
       <div class="altbox" id="alt_${n}_${idx}">
-        <div class="altlbl">Замены — нажми, вставится в план и откроется техника:</div>
-        ${ex.alts.map(a=>{const aid=altId(a.n);return `<button class="alt" data-w="${n}" data-i="${idx}" data-n="${a.n}" ${aid?`data-exid="${aid}"`:""}><b>${a.n}</b> — <span>${a.h}</span>${aid?' <em class="hastech">техника ✓</em>':''}</button>`}).join("")}
+        <div class="altlbl">Замены — нажми, вставится в план:</div>
+        ${ex.alts.map(a=>{const aid=altId(a.n,exId);return `<button class="alt" data-w="${n}" data-i="${idx}" data-n="${a.n}" ${aid?`data-exid="${aid}"`:""}><b>${a.n}</b> — <span>${a.h}</span>${aid?' <em class="hastech">техника ✓</em>':''}</button>`}).join("")}
       </div>
     </div>`;
   });
@@ -878,7 +892,7 @@ function renderProgress(){
     if(getDone(n)){doneN++; if(firstDone===null)firstDone=n; lastDone=n;}
     slots.forEach(({it,idx})=>{
       const t=target(it);
-      const _c=getAlt(n,idx);const exId=(_c&&EX[_c])?_c:exIdFor(it,w);
+      const exId=resolveEx(n,idx,exIdFor(it,w)).id;
       let exSets=0, exVol=0;
       for(let k=0;k<t.sets;k++){
         if(gS("sd",n,idx,k)==="1"){sets++;exSets++;}
@@ -1050,18 +1064,60 @@ function startTimer(sec){
 }
 
 
-/* карта: название замены -> id упражнения в библиотеке (если есть) */
+/* карта: название замены -> id упражнения в библиотеке.
+   Только точные и осмысленные соответствия — без «фаззи»-догадок,
+   иначе замена случайно ссылается на исходное упражнение. */
+const ALIAS={
+ // приседы/ноги
+ "присед в смите":"squat_smith","гакк-присед":"squat_smith","присед в гакк-тренажёре":"squat_smith",
+ "гоблет-присед":"squat_smith","гоблет-присед с гантелью":"squat_smith","гоблет-присед широко":"squat_smith",
+ "приседания плие":"sumo_dl","приседания плие с гантелью":"sumo_dl",
+ "жим ногами (широкая постановка)":"leg_press","жим ногами одной ногой":"leg_press","жим ногами с низкой постановкой стоп":"leg_extension",
+ // выпады
+ "выпады в смите":"lunge_smith","болгарские выпады":"lunge_smith","болгарские выпады с гантелями":"lunge_smith",
+ "выпады на месте с гантелями":"lunge_smith","выпады в сторону":"curtsy_lunge","боковые выпады":"curtsy_lunge",
+ "зашагивания на платформу":"step_up",
+ // мост / хип-траст
+ "ягодичный мост со штангой на полу":"glute_bridge_smith","мост со штангой на полу":"glute_bridge_smith",
+ "мост с гантелью на тазу":"glute_bridge_smith","ягодичный мост многоповторный":"glute_bridge_smith",
+ "hip thrust в специальном тренажёре":"hip_thrust_bench","мини-пульсы в мосте":"kas_glute","frog pump":"frog_pump",
+ // разгибание бедра / ягодица
+ "махи ногой назад в тренажёре (glute machine)":"cable_kickback","отведение ноги назад с резинкой":"cable_kickback",
+ "махи на четвереньках с утяжелителем":"cable_kickback","мини-пульсы в кроссовере":"cable_kickback",
+ // отведение / средняя ягодичная
+ "отведение в тренажёре":"abduction_machine","разведение в тренажёре":"abduction_machine","отведения с резинкой сидя":"abduction_machine",
+ "отведение в кроссовере":"cable_side_leg","отведение с резинкой стоя":"cable_side_leg","«ракушка» лёжа с резинкой":"cable_side_leg","махи в сторону лёжа на боку":"cable_side_leg",
+ // задняя поверхность
+ "румынская тяга в смите":"rdl","сгибание ног сидя":"leg_curl","сгибание ног стоя (поочерёдно)":"leg_curl",
+ "«доброе утро» в смите с лёгким весом":"good_morning","наклоны со штангой (good morning), лёгкий вес":"good_morning",
+ // гиперэкстензия / спина
+ "гиперэкстензия":"hyperextension","гиперэкстензия на фитболе":"hyperextension","обратная гиперэкстензия":"back_extension_weighted",
+ "«супермен» на полу":"superman","плавание (лёжа, поочерёдно рука/нога)":"superman",
+ "пуловер с гантелью лёжа":"pullover","прямые тяги на нижнем блоке":"pullover",
+ "разведение гантелей в наклоне":"face_pull","обратные разведения в тренажёре (peck-deck)":"face_pull","тяга горизонтального блока к груди":"seated_row",
+ "тяга гантели в наклоне":"db_row","рычажная тяга в тренажёре":"db_row","подтягивания в гравитроне":"lat_pulldown","тяга верхнего блока обратным хватом":"lat_pulldown",
+ // пресс
+ "скручивания в тренажёре":"cable_crunch","скручивания на римском стуле":"crunch","скручивания на фитболе":"crunch",
+ "подъём ног лёжа на коврике":"leg_raise","обратные скручивания":"leg_raise","подъём коленей в упоре на брусьях":"leg_raise","подъём ног лёжа с прижатой поясницей":"leg_raise",
+ "планка с колен":"plank","планка на прямых руках":"plank","планка обычная":"plank","планка":"plank",
+ "косые скручивания лёжа":"bicycle","«скалолаз»":"bicycle",
+ "боковая планка с поворотом":"side_plank","боковая планка с колена":"side_plank","наклоны в сторону с гантелью":"russian_twist",
+ "мёртвый жук (dead bug)":"dead_bug",
+ // руки
+ "разгибания с гантелью из-за головы":"overhead_triceps","французский жим лёжа":"overhead_triceps","разгибание на трицепс на блоке (вниз)":"triceps_pushdown","обратные отжимания от скамьи":"triceps_pushdown","разгибание одной рукой в кроссовере":"triceps_pushdown",
+ "сгибания на бицепс в кроссовере":"biceps_curl","«молотки»":"hammer_curl","сгибания в тренажёре":"biceps_curl","сгибания с гантелями (супинация)":"biceps_curl",
+ // икры / приводящие
+ "подъёмы на носки в тренажёре":"calf_raise","подъёмы на носки в жиме ногами":"calf_raise","подъёмы на носки на одной ноге":"calf_raise",
+ "сведение с фитболом лёжа":"adductor"
+};
 const ALT_INDEX=(()=>{const m={};for(const [id,e] of Object.entries(EX)){m[e.name.toLowerCase()]=id;}return m;})();
-function altId(name){
-  const n=name.toLowerCase();
-  if(ALT_INDEX[n]) return ALT_INDEX[n];
-  // мягкое совпадение по ключевым словам
-  for(const [id,e] of Object.entries(EX)){
-    const en=e.name.toLowerCase();
-    const a=en.split(/[ (]/)[0], b=n.split(/[ (]/)[0];
-    if(a.length>4 && b.length>4 && (en.includes(b)||n.includes(a))) return id;
-  }
-  return "";
+function altId(name,currentId){
+  const n=name.toLowerCase().trim();
+  let id="";
+  if(ALT_INDEX[n]) id=ALT_INDEX[n];       // точное имя упражнения из библиотеки
+  else if(ALIAS[n]) id=ALIAS[n];          // курируемый алиас
+  if(id && id===currentId) return "";     // это вариация самого упражнения — техника та же, не ссылаемся
+  return id;                              // "" => текст-только замена
 }
 
 
@@ -1163,9 +1219,8 @@ function openSession(n,pos){
   if(pos===0){return openWarmupStep(n,total);}
   const {it,idx}=slots[pos-1];
   const baseId=exIdFor(it,w);
-  const chosenRaw=getAlt(n,idx);
-  const chosen=(chosenRaw&&EX[chosenRaw])?chosenRaw:"";
-  const exId=chosen||baseId;
+  const R=resolveEx(n,idx,baseId);
+  const exId=R.id;
   const ex=EX[exId];
   const t=target(it);
   const pv=prevSets(n,idx,t.sets);
@@ -1192,7 +1247,7 @@ function openSession(n,pos){
     <button class="backbtn" id="sback">‹ К списку тренировки</button>
     <div class="sess-count">Тренировка ${n} · упражнение ${pos} из ${exCount}</div>
     <div class="pbar"><i style="width:${Math.round(pos/total*100)}%"></i></div>
-    <h2>${ex.name}${ex.fav?' <span class="fav">♥</span>':''}</h2>
+    <h2>${R.name}${ex.fav&&!R.fromAlt?' <span class="fav">♥</span>':''}</h2>
     <div class="muscles">🎯 ${ex.muscles} · план: <b>${fmtSets(it,exId)}</b></div>
     <div class="sess-fig">${ex.svg.replace('class="ex-svg"','class="ex-svg play"')}</div>
     <div class="sessbtns">
@@ -1201,9 +1256,9 @@ function openSession(n,pos){
       <button class="minibtn" id="sessswap" data-w="${n}" data-i="${idx}">↔ Заменить</button>
     </div>
     <div class="altbox sessalt" id="salt_${n}_${idx}">
-      <div class="altlbl">Замены — нажми, применится и покажет технику:</div>
-      ${ex.alts.map(a=>{const aid=altId(a.n);return `<button class="alt" data-w="${n}" data-i="${idx}" data-n="${a.n}" data-sess="1" ${aid?`data-exid="${aid}"`:""}><b>${a.n}</b> — <span>${a.h}</span>${aid?' <em class="hastech">техника ✓</em>':''}</button>`}).join("")}
-      ${chosen?`<button class="alt" data-w="${n}" data-i="${idx}" data-unrep="1"><b>↩ Вернуть ${EX[baseId].name}</b></button>`:""}
+      <div class="altlbl">Замены — нажми, применится сразу. Техника — по кнопке 📖:</div>
+      ${ex.alts.map(a=>{const aid=altId(a.n,exId);return `<button class="alt" data-w="${n}" data-i="${idx}" data-n="${a.n}" data-sess="1" ${aid?`data-exid="${aid}"`:""}><b>${a.n}</b> — <span>${a.h}</span>${aid?' <em class="hastech">техника ✓</em>':''}</button>`}).join("")}
+      ${R.fromAlt?`<button class="alt" data-w="${n}" data-i="${idx}" data-sess="1" data-unrep="1"><b>↩ Вернуть «${EX[baseId].name}»</b></button>`:""}
     </div>
     ${it.note?`<div class="exnote" style="padding:6px 2px">· ${it.note}</div>`:""}
     ${guide}
@@ -1222,7 +1277,7 @@ function finishSession(n,slots,w){
   const day=DAYS[DAY_ORDER[(n-1)%3]];
   slots.forEach(({it,idx})=>{
     const t=target(it);let lw="";
-    const _c=getAlt(n,idx);const exId=(_c&&EX[_c])?_c:exIdFor(it,w);
+    const exId=resolveEx(n,idx,exIdFor(it,w)).id;
     for(let k=0;k<t.sets;k++){
       const wv=parseFloat((gS("sw",n,idx,k)||"").replace(",","."))||0;
       const r=parseFloat(gS("sr",n,idx,k))||0;
@@ -1293,13 +1348,21 @@ document.addEventListener("click",e=>{
   if(sw){const box=document.getElementById("alt_"+sw.dataset.w+"_"+sw.dataset.i);box.classList.toggle("on");return;}
   const alt=e.target.closest(".alt");
   if(alt){
-    if(alt.dataset.unrep){setAlt(alt.dataset.w,alt.dataset.i,"");openSession(currentWO,sessPos);return;}
+    const inSess=!!alt.dataset.sess;
+    if(alt.dataset.unrep){
+      setAlt(alt.dataset.w,alt.dataset.i,"");
+      if(inSess)openSession(currentWO,sessPos); else openWorkout(+alt.dataset.w);
+      return;
+    }
     const exid=alt.dataset.exid||"";
-    setAlt(alt.dataset.w,alt.dataset.i,exid||alt.dataset.n);
-    if(alt.dataset.sess){
-      if(exid){sessBack=true;openModal(exid);} else {openSession(currentWO,sessPos);}
+    // сохраняем: id библиотеки ИЛИ текстовую вариацию с префиксом txt:
+    setAlt(alt.dataset.w,alt.dataset.i, exid?exid:("txt:"+alt.dataset.n));
+    // после замены просто перерисовываем текущий экран — замена уже видна.
+    // технику открываем только если есть отдельная карточка (exid) и по желанию.
+    if(inSess){
+      openSession(currentWO,sessPos);
     } else {
-      if(exid){currentWO=+alt.dataset.w;openModal(exid);} else {openWorkout(+alt.dataset.w);}
+      openWorkout(+alt.dataset.w);
     }
     return;
   }
@@ -1319,7 +1382,7 @@ document.addEventListener("change",e=>{
   }
 });
 document.addEventListener("input",e=>{
-  if(e.target.matches(".wt")) setWt(e.target.dataset.w,e.target.dataset.i,e.target.value.trim());
+  if(e.target.matches(".wt")) setWt(e.target.dataset.n,e.target.dataset.i,e.target.value.trim());
   if(e.target.matches(".sw")) sS("sw",e.target.dataset.n,e.target.dataset.i,e.target.dataset.k,e.target.value.trim());
   if(e.target.matches(".sr")) sS("sr",e.target.dataset.n,e.target.dataset.i,e.target.dataset.k,e.target.value.trim());
 });
