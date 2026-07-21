@@ -98,7 +98,10 @@ nav{position:sticky;top:0;z-index:50;background:rgba(250,243,236,.9);backdrop-fi
 .hastech{color:var(--coral-deep);font-style:normal;font-size:11px;font-weight:800}
 .altbox .alt b{font-weight:800}
 .altbox .alt span{color:var(--mocha);font-size:12px}
-.replaced{font-size:12px;color:var(--coral-deep);font-weight:700;width:100%}
+.replaced{font-size:12px;color:var(--coral-deep);font-weight:700}
+.unrepbtn{border:1.5px solid var(--line);background:#fff;color:var(--mocha);font-family:'Manrope';font-weight:800;font-size:12px;border-radius:100px;padding:5px 12px;cursor:pointer}
+.unrepbtn:hover{border-color:var(--coral);color:var(--coral-deep)}
+
 .blockhdr{width:100%;text-align:center;font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--latte);padding:10px 0 2px}
 
 /* ---------- LIBRARY ---------- */
@@ -282,6 +285,28 @@ nav{position:sticky;top:0;z-index:50;background:rgba(250,243,236,.9);backdrop-fi
 .rolelegend{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin-bottom:16px;box-shadow:var(--shadow)}
 .rolelegend .rl{display:flex;align-items:flex-start;gap:10px;padding:6px 0;font-size:13px;color:#5E4737}
 .rolelegend .rl b{color:var(--coffee)}
+
+
+/* svg figures */
+.train-hero{background:linear-gradient(135deg,#FBE9E0,#FDF3E7);border:1px solid #F3D9CB;border-radius:24px;padding:22px 20px;box-shadow:var(--shadow);margin-bottom:18px;text-align:center}
+.train-hero .tlabel{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--coral-deep);margin-bottom:8px}
+.train-hero h2{padding:0;margin-bottom:4px}
+.train-hero .tsub{font-size:13.5px;color:var(--mocha);margin-bottom:6px}
+.train-hero .warmpeek{font-size:12.5px;color:var(--latte);margin-bottom:14px}
+.trainstart{display:block;width:100%;border:none;background:var(--coral);color:#fff;font-family:'Manrope';font-weight:800;font-size:16px;border-radius:100px;padding:16px;cursor:pointer;box-shadow:0 8px 22px rgba(228,121,94,.4);transition:.2s}
+.trainstart:hover{background:var(--coral-deep)}
+.train-done{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:26px 20px;text-align:center;color:var(--mocha);box-shadow:var(--shadow);margin-bottom:18px}
+.tpick{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px 18px;box-shadow:var(--shadow)}
+.tpick h3{font-size:15px;margin-bottom:12px}
+.twk{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line)}
+.twk:last-child{border-bottom:none}
+.twk .wl{font-size:12.5px;font-weight:800;color:var(--mocha);width:76px;flex:none}
+.twbtn{width:44px;height:44px;border-radius:50%;border:2px solid var(--line);background:#fff;font-family:'Manrope';font-weight:800;font-size:13px;color:var(--mocha);cursor:pointer;transition:.15s;position:relative}
+.twbtn:hover{border-color:var(--coral)}
+.twbtn.tdone2{background:var(--coral);border-color:var(--coral);color:#fff}
+.twbtn.tnext{border-color:var(--coral);color:var(--coral-deep);box-shadow:0 0 0 3px var(--coral-bg)}
+.tsync{font-size:12px;color:var(--latte);text-align:center;margin-top:12px}
+.varnote{background:linear-gradient(120deg,var(--coral-bg),#FDF0E4);border:1px solid #F3D0BC;border-radius:12px;padding:10px 14px;font-size:13px;font-weight:700;color:#7C4632;margin:10px 0}
 /* svg figures */
 .ex-svg .body{stroke:#6B4F3F;stroke-width:9;stroke-linecap:round;stroke-linejoin:round;fill:none}
 .ex-svg .thin{stroke:#6B4F3F;stroke-width:7;stroke-linecap:round;fill:none}
@@ -336,6 +361,7 @@ footer{margin-top:50px;text-align:center;color:var(--latte);font-size:12.5px}
 <nav>
   <div class="tabs">
     <button class="tab on" data-page="plan">📅 План тренировок</button>
+    <button class="tab" data-page="train">▶ Тренировка</button>
     <button class="tab" data-page="lib">🏋️‍♀️ Упражнения</button>
     <button class="tab" data-page="progress">📊 Прогресс</button>
     <button class="tab" data-page="guide">☕ Как заниматься</button>
@@ -352,6 +378,7 @@ footer{margin-top:50px;text-align:center;color:var(--latte);font-size:12.5px}
   <div id="planRoot"></div>
 </section>
 
+<section id="page-train" class="page"></section>
 <section id="page-lib" class="page">
   <div class="rolelegend" id="rolelegend"></div>
   <div class="rolefilter" id="rolefilter"></div>
@@ -795,6 +822,8 @@ function resolveEx(n,idx,baseId){
   if(raw){
     if(raw.startsWith("txt:")){const nm=raw.slice(4);return {id:baseId,name:nm,fromAlt:true,hasCard:false};}
     if(EX[raw]) return {id:raw,name:EX[raw].name,fromAlt:true,hasCard:true};
+    // легаси-формат (замены, сохранённые старыми версиями): просто текстовое имя
+    return {id:baseId,name:raw,fromAlt:true,hasCard:false};
   }
   return {id:baseId,name:EX[baseId].name,fromAlt:false,hasCard:true};
 }
@@ -854,14 +883,14 @@ function openWorkout(n){
     const t=target(it);
     const pv=prevSets(n,idx,t.sets);
     lines+=`<div class="exline">
-      <a class="exname" data-ex="${exId}">${R.name}</a>${fav} ${roleBadge(exId,true)}
+      <a class="exname" data-ex="${exId}" ${R.fromAlt&&!R.hasCard?`data-vn="${R.name}"`:""}>${R.name}</a>${fav} ${roleBadge(exId,true)}
       <span class="exsets">${fmtSets(it,exId)}</span>
       ${pv?`<span class="hist">📈 ${fmtPrev(pv)}</span>`:""}
       <input class="wt" inputmode="decimal" data-n="${n}" data-i="${idx}" value="${getWt(n,idx)}" placeholder="${(n>3&&getWt(n-3,idx))?getWt(n-3,idx)+' кг →':'вес, кг'}" title="Рабочий вес — сохранится">
       <a class="ytmini" href="${yt(R.name)}" target="_blank" rel="noopener" title="Короткие видео с техникой">▶ шортс</a>
       <button class="swap" data-w="${n}" data-i="${idx}">↔ заменить</button>
       ${it.note?`<span class="exnote">· ${it.note}</span>`:""}
-      ${R.fromAlt?`<span class="replaced">↔ заменено${R.hasCard?'':' (вариация)'} <a style="cursor:pointer;text-decoration:underline" class="unrep" data-w="${n}" data-i="${idx}">вернуть «${EX[baseId].name}»</a></span>`:""}
+      ${R.fromAlt?`<span class="replaced">↔ заменено${R.hasCard?'':' (вариация)'}</span><button class="unrep unrepbtn" data-w="${n}" data-i="${idx}">↩ вернуть исходное</button>`:""}
       <div class="altbox" id="alt_${n}_${idx}">
         <div class="altlbl">Замены — нажми, вставится в план:</div>
         ${ex.alts.map(a=>{const aid=altId(a.n,exId);return `<button class="alt" data-w="${n}" data-i="${idx}" data-n="${a.n}" ${aid?`data-exid="${aid}"`:""}><b>${a.n}</b> — <span>${a.h}</span>${aid?' <em class="hastech">техника ✓</em>':''}</button>`}).join("")}
@@ -899,6 +928,43 @@ function updateProgress(){
 }
 
 /* ================= RENDER: LIBRARY ================= */
+
+
+/* ================= TRAIN TAB ================= */
+function renderTrain(){
+  const el=document.getElementById("page-train"); if(!el)return;
+  let next=null;
+  for(let n=1;n<=24;n++){if(!getDone(n)){next=n;break;}}
+  let hero;
+  if(next){
+    const w=Math.floor((next-1)/3);
+    const day=DAYS[DAY_ORDER[(next-1)%3]];
+    const wu=warmupFor(next);
+    hero=`<div class="train-hero">
+      <div class="tlabel">Следующая по плану · неделя ${w+1} · ${WEEKS[w].ph}</div>
+      <h2>Тренировка ${next} · День ${day.cls}</h2>
+      <div class="tsub">${day.title} · ${day.dur}</div>
+      <div class="warmpeek">🔥 Разминка: кардио ${wu.cardio.split("·")[0].trim()} + ${wu.acts[0].n.toLowerCase()}</div>
+      <button class="trainstart" data-n="${next}">▶ Начать тренировку</button>
+    </div>`;
+  } else {
+    hero=`<div class="train-done"><div style="font-size:40px;margin-bottom:8px">🌸</div><b>Все 24 тренировки закрыты!</b><br>Цикл завершён — можно начинать новый круг с бо́льшими весами.</div>`;
+  }
+  let rows="";
+  for(let w=0;w<8;w++){
+    let btns="";
+    for(let k=0;k<3;k++){
+      const n=w*3+k+1;
+      const cls=DAY_ORDER[k];
+      const done=getDone(n);
+      btns+=`<button class="twbtn ${done?"tdone2":(n===next?"tnext":"")}" data-n="${n}" title="Тренировка ${n} · День ${cls}">${done?"✓":n}</button>`;
+    }
+    rows+=`<div class="twk"><span class="wl">Неделя ${w+1}</span>${btns}</div>`;
+  }
+  el.innerHTML=hero+`
+    <div class="tpick"><h3>Или выбери любую</h3>${rows}
+    <div class="tsync">Данные общие с «Планом»: галочки, веса и подходы синхронизируются между режимами.</div></div>`;
+}
 
 /* ================= PROGRESS DASHBOARD ================= */
 function renderProgress(){
@@ -999,15 +1065,16 @@ function renderLib(filter){
 }
 
 /* ================= MODAL ================= */
-function openModal(id){
+function openModal(id,vn){
   const e=EX[id];
   const back=currentWO?`<button class="backbtn" id="mback">‹ ${sessBack?"Назад к упражнению":"Назад к тренировке "+currentWO}</button>`:"";
   document.getElementById("modal").innerHTML=`
     <button class="close" id="mclose">✕</button>
     ${back}
     <div class="mgrp">${GNAMES[e.g]}${e.fav?" · ♥ твоё любимое":""}</div>
+    ${vn?`<div class="varnote">↔ Это вариация упражнения «${e.name}» — техника, акценты и замены общие.</div>`:""}
     <div style="margin:8px 0 4px">${roleBadge(id,false)}</div>${e.role&&ROLES[e.role]?`<div style="font-size:12.5px;color:var(--mocha);margin-bottom:4px">${ROLES[e.role].desc}</div>`:""}
-    <h2>${e.name}</h2>
+    <h2>${vn||e.name}</h2>
     <div class="muscles">🎯 Работают: ${e.muscles}</div>
     <div class="figbox">${e.svg}</div>
     <div class="fighint" id="fighint">👆 нажми на человечка — покажу движение</div>
@@ -1023,7 +1090,8 @@ function openModal(id){
   document.getElementById("overlay").classList.add("on");
   document.body.style.overflow="hidden";
 }
-function closeModal(){currentWO=null;sessBack=false;clearInterval(timerInt);document.getElementById("overlay").classList.remove("on");document.body.style.overflow="";}
+function closeModal(){currentWO=null;sessBack=false;clearInterval(timerInt);
+  if(document.getElementById("page-train")&&document.getElementById("page-train").classList.contains("on"))renderTrain();document.getElementById("overlay").classList.remove("on");document.body.style.overflow="";}
 
 /* ================= GUIDE ================= */
 document.getElementById("page-guide").innerHTML=`
@@ -1271,7 +1339,7 @@ function openSession(n,pos){
   let rows="";
   for(let k=0;k<t.sets;k++){
     const done=gS("sd",n,idx,k)==="1";
-    const phW=pv&&pv[k]&&pv[k].w?pv[k].w:"кг";
+    const phW=(pv&&pv[k]&&pv[k].w)||getWt(n,idx)||(n>3?getWt(n-3,idx):"")||"кг";
     rows+=`<div class="setrow ${done?"ok":""}" id="sr_${idx}_${k}">
       <span class="sn">${k+1}</span>
       <input class="sw" inputmode="decimal" data-n="${n}" data-i="${idx}" data-k="${k}" value="${gS("sw",n,idx,k)}" placeholder="${phW}">
@@ -1290,7 +1358,7 @@ function openSession(n,pos){
     <div style="margin:6px 0 2px">${roleBadge(exId,false)}</div>
     <div class="sess-fig">${ex.svg.replace('class="ex-svg"','class="ex-svg play"')}</div>
     <div class="sessbtns">
-      <button class="minibtn" id="sesstech" data-ex="${exId}">📖 Техника</button>
+      <button class="minibtn" id="sesstech" data-ex="${exId}" ${R.fromAlt&&!R.hasCard?`data-vn="${R.name}"`:""}>📖 Техника</button>
       <a class="minibtn" href="${yt(ex.name)}" target="_blank" rel="noopener">▶ Шортс</a>
       <button class="minibtn" id="sessswap" data-w="${n}" data-i="${idx}">↔ Заменить</button>
     </div>
@@ -1353,7 +1421,8 @@ document.addEventListener("click",e=>{
   if(tab){document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t===tab));
     document.querySelectorAll(".page").forEach(p=>p.classList.remove("on"));
     document.getElementById("page-"+tab.dataset.page).classList.add("on");
-    if(tab.dataset.page==="progress")renderProgress();return;}
+    if(tab.dataset.page==="progress")renderProgress();
+    if(tab.dataset.page==="train")renderTrain();return;}
   const chip=e.target.closest(".chip");
   if(chip){document.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c===chip));
     document.querySelectorAll(".rchip").forEach(c=>c.classList.toggle("on",c.dataset.r==="all"));
@@ -1373,7 +1442,11 @@ document.addEventListener("click",e=>{
       if(hint) hint.textContent=s.classList.contains("play")?"⏸ нажми ещё раз — пауза":"👆 нажми на человечка — покажу движение";}
     return;}
   if(e.target.id==="startSess"){openSession(+e.target.dataset.n,0);return;}
-  if(e.target.id==="sesstech"){sessBack=true;openModal(e.target.dataset.ex);return;}
+  const ts=e.target.closest(".trainstart");
+  if(ts){openSession(+ts.dataset.n,0);return;}
+  const twb=e.target.closest(".twbtn");
+  if(twb){openSession(+twb.dataset.n,0);return;}
+  if(e.target.id==="sesstech"){sessBack=true;openModal(e.target.dataset.ex,e.target.dataset.vn||"");return;}
   if(e.target.id==="sessswap"){const b=document.getElementById("salt_"+e.target.dataset.w+"_"+e.target.dataset.i);if(b)b.classList.toggle("on");return;}
   if(e.target.id==="sback"){openWorkout(currentWO);return;}
   if(e.target.id==="sprev"){openSession(currentWO,sessPos-1);return;}
@@ -1388,7 +1461,7 @@ document.addEventListener("click",e=>{
   const tb=e.target.closest(".tbtn");
   if(tb){startTimer(+tb.dataset.t);return;}
   const nm=e.target.closest(".exname, .excard");
-  if(nm){openModal(nm.dataset.ex);return;}
+  if(nm){openModal(nm.dataset.ex,nm.dataset.vn||"");return;}
   const sw=e.target.closest(".swap");
   if(sw){const box=document.getElementById("alt_"+sw.dataset.w+"_"+sw.dataset.i);box.classList.toggle("on");return;}
   const alt=e.target.closest(".alt");
